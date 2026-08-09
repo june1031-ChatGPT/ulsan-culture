@@ -197,6 +197,11 @@ def test_adapter_requests_details_only_for_internal_items():
     assert result.summary.external_count == 9
     assert result.summary.detail_failure_count == 3
     assert all(event.source_event_id is None for event in result.events if event.resource_kind == "external")
+    assert all(
+        event.source_item_key.startswith("urlsha256:")
+        for event in result.events
+        if event.resource_kind == "external"
+    )
 
 
 def test_adapter_fetches_exp_slots_for_active_dates_only_and_summarizes_dry_run():
@@ -232,6 +237,10 @@ def test_adapter_fetches_exp_slots_for_active_dates_only_and_summarizes_dry_run(
         "total": 7,
     }
     assert len(result.summary.samples) == 3
+    internal = next(event for event in result.events if event.resource_kind == "EXP")
+    assert internal.source_item_key == "EXP_0000000000000050"
+    assert internal.registration_start is not None
+    assert internal.registration_start_date is None
     assert "목록 건수: 12" in format_summary(result.summary)
     assert "요청 횟수: detail=1, exp_slots=5, list=1, total=7" in format_summary(
         result.summary

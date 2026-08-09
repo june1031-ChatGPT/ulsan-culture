@@ -22,6 +22,7 @@ def create_event(db_session, source_event_id: str = "EXP_1") -> Event:
         title="가족 체험",
         source=source,
         source_event_id=source_event_id,
+        source_item_key=source_event_id,
         source_url=f"https://example.com/events/{source_event_id}",
     )
     db_session.add(event)

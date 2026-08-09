@@ -2,6 +2,8 @@
 
 `events.event_start`와 `events.event_end`는 프로그램의 대표/요약 기간으로 유지한다. 실제 검색, 달력, 행사 전 알림에서 사용할 비연속 회차는 `event_occurrences.start_at`과 `event_occurrences.end_at`을 기준으로 한다. 접수기간인 `registration_start`와 `registration_end`는 프로그램 단위이므로 occurrence에 복제하지 않는다.
 
+대표/요약 기간 또는 접수기간이 날짜 정밀도로만 확인되면 각각 `event_start_date`/`event_end_date`, `registration_start_date`/`registration_end_date`를 사용한다. 같은 경계값의 datetime/date 컬럼은 상호 배타적이며, occurrence는 실제 회차 시각이 확인된 경우만 생성한다.
+
 ## 원본 회차 식별자
 
 한 이벤트 안에서 `source_occurrence_id`가 유일하도록 `(event_id, source_occurrence_id)` unique constraint를 둔다. Adapter는 원본 식별자를 안정적인 문자열로 조합해야 한다.

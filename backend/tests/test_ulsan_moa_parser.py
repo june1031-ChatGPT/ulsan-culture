@@ -1,12 +1,15 @@
 from datetime import date, datetime
 from decimal import Decimal
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
 
 from app.crawlers.ulsan_moa import (
     UlsanMoaParseError,
+    build_source_item_key,
     canonicalize_url,
+    normalize_event,
     parse_day_detail,
     parse_day_slots,
     parse_detail,
@@ -130,6 +133,47 @@ def test_parse_lec_detail_separates_registration_and_event_periods():
     assert "초등학생 개인 및 단체" in detail.target_text
     assert detail.active_dates == ()
     assert detail.detail_url == detail.reservation_url == LEC_URL
+
+
+def test_normalize_exact_datetime_event_uses_only_datetime_fields_and_internal_key():
+    item = next(
+        item
+        for item in parse_list(fixture_text("f300_list.html"))
+        if item.source_event_id == "LEC_0000000000000828"
+    )
+    detail = parse_lec_detail(fixture_text("lec_detail.html"), source_url=LEC_URL)
+
+    event = normalize_event("F300", item, detail)
+
+    assert event.event_start == detail.event_start
+    assert event.event_end == detail.event_end
+    assert event.registration_start == detail.registration_start
+    assert event.registration_end == detail.registration_end
+    assert event.event_start_date is None
+    assert event.event_end_date is None
+    assert event.registration_start_date is None
+    assert event.registration_end_date is None
+    assert event.source_event_id == "LEC_0000000000000828"
+    assert event.source_item_key == event.source_event_id
+
+
+def test_normalize_date_only_external_event_uses_canonical_url_hash_key():
+    item = parse_list(fixture_text("f300_list.html"))[0]
+
+    event = normalize_event("F300", item, None)
+    expected = sha256(canonicalize_url(item.detail_url).encode("utf-8")).hexdigest()
+
+    assert event.event_start is None
+    assert event.event_end is None
+    assert event.registration_start is None
+    assert event.registration_end is None
+    assert event.event_start_date == item.event_start
+    assert event.event_end_date == item.event_end
+    assert event.registration_start_date == item.registration_start
+    assert event.registration_end_date == item.registration_end
+    assert event.source_event_id is None
+    assert event.source_item_key == f"urlsha256:{expected}"
+    assert build_source_item_key(None, f"{item.detail_url}#temporary") == event.source_item_key
 
 
 def test_parse_exp_detail_preserves_specific_target_constraints_and_active_dates():

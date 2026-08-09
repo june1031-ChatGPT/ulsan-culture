@@ -6,8 +6,15 @@ const dateFormatter = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul",
 });
 
-function formatDate(value: string | null) {
-  return value ? dateFormatter.format(new Date(value)) : "일정 미정";
+function formatDate(datetimeValue: string | null, dateValue: string | null) {
+  if (datetimeValue) {
+    return dateFormatter.format(new Date(datetimeValue));
+  }
+  if (dateValue) {
+    const [year, month, day] = dateValue.split("-");
+    return `${Number(year)}. ${Number(month)}. ${Number(day)}.`;
+  }
+  return "일정 미정";
 }
 
 export function EventCard({ event }: { event: EventItem }) {
@@ -25,18 +32,23 @@ export function EventCard({ event }: { event: EventItem }) {
       <dl className="mt-5 grid gap-3 text-sm">
         <div className="grid grid-cols-[5rem_1fr] gap-3">
           <dt className="font-medium text-slate-500">행사 시작</dt>
-          <dd className="text-slate-800">{formatDate(event.event_start)}</dd>
+          <dd className="text-slate-800">
+            {formatDate(event.event_start, event.event_start_date)}
+          </dd>
         </div>
         <div className="grid grid-cols-[5rem_1fr] gap-3">
           <dt className="font-medium text-slate-500">접수 시작</dt>
-          <dd className="text-slate-800">{formatDate(event.registration_start)}</dd>
+          <dd className="text-slate-800">
+            {formatDate(event.registration_start, event.registration_start_date)}
+          </dd>
         </div>
         <div className="grid grid-cols-[5rem_1fr] gap-3">
           <dt className="font-medium text-slate-500">접수 마감</dt>
-          <dd className="text-slate-800">{formatDate(event.registration_end)}</dd>
+          <dd className="text-slate-800">
+            {formatDate(event.registration_end, event.registration_end_date)}
+          </dd>
         </div>
       </dl>
     </article>
   );
 }
-

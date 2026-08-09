@@ -21,10 +21,14 @@ class NormalizedEvent:
     address: str | None
     original_category: str | None
     target_text: str | None
-    event_start: date | datetime | None
-    event_end: date | datetime | None
-    registration_start: date | datetime | None
-    registration_end: date | datetime | None
+    event_start: datetime | None
+    event_end: datetime | None
+    event_start_date: date | None
+    event_end_date: date | None
+    registration_start: datetime | None
+    registration_end: datetime | None
+    registration_start_date: date | None
+    registration_end_date: date | None
     registration_period_text: str | None
     event_period_text: str | None
     registration_status: str | None
@@ -38,6 +42,7 @@ class NormalizedEvent:
     detail_url: str
     image_url: str | None
     source_event_id: str | None
+    source_item_key: str
     source_url: str
     occurrences: tuple[ParsedOccurrence, ...]
 

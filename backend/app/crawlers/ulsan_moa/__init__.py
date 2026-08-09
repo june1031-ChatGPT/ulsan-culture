@@ -1,4 +1,8 @@
-from app.crawlers.ulsan_moa.adapter import UlsanMoaAdapter, normalize_event
+from app.crawlers.ulsan_moa.adapter import (
+    UlsanMoaAdapter,
+    build_source_item_key,
+    normalize_event,
+)
 from app.crawlers.ulsan_moa.client import (
     UlsanMoaClient,
     UlsanMoaNetworkError,
@@ -31,6 +35,7 @@ __all__ = [
     "UlsanMoaClient",
     "UlsanMoaNetworkError",
     "UlsanMoaParseError",
+    "build_source_item_key",
     "canonicalize_url",
     "is_retryable_status",
     "normalize_event",

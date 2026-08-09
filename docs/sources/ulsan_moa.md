@@ -400,7 +400,8 @@ mnu_code=F601
 | `reservation_url` | 공개 `step01` 상세 URL | 공개 `step01` 상세 URL | 외부 href | 내부 예약은 POST/login이므로 상세 URL을 진입점으로 사용 |
 | `detail_url` | canonical `step01` URL | canonical `step01` URL | 외부 href | `;jsessionid` 제거 |
 | `image_url` | 상세/카드 `img[src]` | 상세/카드 `img[src]` | 카드의 외부 이미지 URL | 저장은 가능하나 재배포 권한은 별도 확인 |
-| `source_event_id` | `rsrcUnqId` (`LEC_...`) | `rsrcUnqId` (`EXP_...`/`DAY_...`) | 공식 울산모아 ID 없음 | 외부 URL hash를 쓰더라도 파생 ID임을 별도 표시 |
+| `source_event_id` | `rsrcUnqId` (`LEC_...`) | `rsrcUnqId` (`EXP_...`/`DAY_...`) | `null` | Source가 공식 제공한 ID만 저장 |
+| `source_item_key` | `source_event_id`와 동일 | `source_event_id`와 동일 | `urlsha256:<canonical URL의 SHA-256>` | 울산컬처 내부 식별키. `(source_id, source_item_key)`로 유일 |
 
 ### 샘플 핵심 매핑
 
@@ -422,6 +423,7 @@ reservation_url      = https://ulsan.go.kr/y/yes/page.do?mnu_code=F303&step=step
 detail_url           = https://ulsan.go.kr/y/yes/page.do?mnu_code=F303&step=step01&rsrcUnqId=LEC_0000000000000828
 image_url            = https://ulsan.go.kr/y/common/func/atch/ImageView.do?atchFileId=FILE_000000000003053&fileSn=0
 source_event_id      = LEC_0000000000000828
+source_item_key      = LEC_0000000000000828
 ```
 
 교육체험 `EXP_0000000000000050`의 2026-08-11 회차:
@@ -442,6 +444,7 @@ reservation_url      = https://ulsan.go.kr/y/yes/page.do?mnu_code=F401&step=step
 detail_url           = https://ulsan.go.kr/y/yes/page.do?mnu_code=F401&step=step01&rsrcUnqId=EXP_0000000000000050
 image_url            = https://ulsan.go.kr/y/common/func/atch/ImageView.do?atchFileId=FILE_000000000004042&fileSn=0
 source_event_id      = EXP_0000000000000050
+source_item_key      = EXP_0000000000000050
 ```
 
 ## 8. 행사일과 접수일의 명확한 구분
@@ -463,7 +466,9 @@ source_event_id      = EXP_0000000000000050
 - `접수기간: 상시`를 임의의 무한 날짜로 변환하지 않기
 - 여러 체험 회차의 최소~최대만 저장해 그 사이가 계속 운영되는 것처럼 보이게 하지 않기
 
-현재 핵심 모델의 `event_start`/`event_end`만으로는 여러 비연속 회차를 정확히 표현하기 어렵다. 구현 전에 `event_occurrences` 또는 동등한 회차 테이블을 추가하는 것이 좋다. 대표 이벤트에는 가장 이른 시작/가장 늦은 종료를 파생값으로 둘 수 있지만, 실제 알림·달력은 occurrence를 기준으로 해야 한다.
+날짜만 확인한 값은 `event_start_date`/`event_end_date` 또는 `registration_start_date`/`registration_end_date`에 저장한다. 시각까지 확인한 값은 기존 datetime 필드에 저장하며 대응 date 필드는 `null`로 둔다.
+
+여러 비연속 회차는 `event_occurrences`에 보존한다. 대표 이벤트에는 요약 기간을 둘 수 있지만, 실제 알림·달력은 occurrence를 기준으로 해야 한다.
 
 ## 9. 구현 시 주의사항
 
@@ -481,7 +486,7 @@ source_event_id      = EXP_0000000000000050
 12. **대기/차단 페이지 감지**: 사이트는 TRACER 대기·차단 문구를 HTML에 포함할 수 있다. HTTP 200만 성공으로 판단하지 말고 제목/본문 시그니처와 기대 카드 컨테이너를 검증한다.
 13. **요청 간격과 재시도**: 낮은 동시성, timeout, 지수 백오프, jitter를 사용한다. 전체 목록을 매번 상세까지 전부 재요청하지 말고 목록 hash와 기존 ID를 비교한다.
 14. **이미지 정책**: 이미지 URL 수집과 이미지 파일 재배포는 별개다. 공공누리/권리 확인 전에는 원본 URL과 출처만 보존하는 것이 안전하다.
-15. **상태는 날짜에서 계산**: 화면의 `접수중`, `접수마감` 표시는 원문으로 보존하되 내부 상태는 접수 시작/종료시각으로 계산한다.
+15. **상태는 날짜/시각에서 계산**: 화면의 `접수중`, `접수마감` 표시는 원문으로 보존하되 내부 상태는 접수 시작/종료의 확인된 정밀도에 따라 계산한다.
 
 ## 10. 권장 수집 흐름
 

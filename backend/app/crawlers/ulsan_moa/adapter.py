@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import asdict
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
+from hashlib import sha256
 from typing import Protocol, cast
 from urllib.parse import parse_qs, urlsplit
 
@@ -14,6 +15,7 @@ from app.crawlers.ulsan_moa.parser import (
     ParsedListItem,
     ParsedOccurrence,
     UlsanMoaParseError,
+    canonicalize_url,
     parse_day_slots,
     parse_detail,
     parse_exp_slots,
@@ -216,6 +218,7 @@ def normalize_event(
     occurrences: tuple[ParsedOccurrence, ...] = (),
 ) -> NormalizedEvent:
     """Map parser DTOs to Event-shaped data without inventing timestamps or IDs."""
+    source_item_key = build_source_item_key(item.source_event_id, item.detail_url)
     if detail is None:
         return NormalizedEvent(
             source_code=source,
@@ -227,10 +230,14 @@ def normalize_event(
             address=None,
             original_category=item.original_category,
             target_text=None,
-            event_start=item.event_start,
-            event_end=item.event_end,
-            registration_start=item.registration_start,
-            registration_end=item.registration_end,
+            event_start=None,
+            event_end=None,
+            event_start_date=item.event_start,
+            event_end_date=item.event_end,
+            registration_start=None,
+            registration_end=None,
+            registration_start_date=item.registration_start,
+            registration_end_date=item.registration_end,
             registration_period_text=item.registration_period_text,
             event_period_text=item.event_period_text,
             registration_status=item.registration_status_text,
@@ -244,6 +251,7 @@ def normalize_event(
             detail_url=item.detail_url,
             image_url=item.image_url,
             source_event_id=item.source_event_id,
+            source_item_key=source_item_key,
             source_url=item.detail_url,
             occurrences=occurrences,
         )
@@ -260,8 +268,16 @@ def normalize_event(
         target_text=detail.target_text,
         event_start=detail.event_start,
         event_end=detail.event_end,
+        event_start_date=None if detail.event_start is not None else item.event_start,
+        event_end_date=None if detail.event_end is not None else item.event_end,
         registration_start=detail.registration_start,
         registration_end=detail.registration_end,
+        registration_start_date=(
+            None if detail.registration_start is not None else item.registration_start
+        ),
+        registration_end_date=(
+            None if detail.registration_end is not None else item.registration_end
+        ),
         registration_period_text=detail.registration_period_text,
         event_period_text=detail.event_period_text,
         registration_status=item.registration_status_text,
@@ -275,9 +291,19 @@ def normalize_event(
         detail_url=detail.detail_url,
         image_url=detail.image_url or item.image_url,
         source_event_id=detail.source_event_id,
+        source_item_key=build_source_item_key(detail.source_event_id, detail.detail_url),
         source_url=detail.detail_url,
         occurrences=occurrences,
     )
+
+
+def build_source_item_key(source_event_id: str | None, source_url: str) -> str:
+    """Build the stable per-Source key without inventing an official source ID."""
+    if source_event_id is not None:
+        return source_event_id
+    canonical_url = canonicalize_url(source_url)
+    digest = sha256(canonical_url.encode("utf-8")).hexdigest()
+    return f"urlsha256:{digest}"
 
 
 def _menu_code(url: str, resource_kind: str) -> str:

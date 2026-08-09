@@ -116,6 +116,8 @@
 ```text
 event_start
 event_end
+event_start_date
+event_end_date
 ```
 
 #### 접수기간
@@ -123,9 +125,13 @@ event_end
 ```text
 registration_start
 registration_end
+registration_start_date
+registration_end_date
 ```
 
 두 기간을 절대 혼용하지 않는다.
+
+시각까지 확인한 값은 datetime 필드에, 날짜만 확인한 값은 date 필드에 저장한다. 같은 경계값에 두 정밀도를 동시에 저장하거나 날짜-only 값에 임의의 시각을 붙이지 않는다.
 
 예:
 
@@ -718,13 +724,19 @@ age_max
 ```text
 event_start
 event_end
+event_start_date
+event_end_date
 ```
+
+정확한 시각이 확인되면 datetime 필드만 사용하고, 날짜만 확인되면 date 필드만 사용한다. 같은 경계값에 두 정밀도를 동시에 저장하거나 날짜-only 값에 임의의 시각을 붙이지 않는다.
 
 ### 접수기간
 
 ```text
 registration_start
 registration_end
+registration_start_date
+registration_end_date
 registration_status
 ```
 
@@ -754,8 +766,11 @@ image_url
 ```text
 source_id
 source_event_id
+source_item_key
 source_url
 ```
+
+`source_event_id`에는 Source가 공식 제공한 ID만 저장한다. `source_item_key`는 한 Source 안에서 항목을 안정적으로 식별하는 필수 내부 키이며, 공식 ID가 있으면 그 ID를 사용하고 없으면 canonical URL의 SHA-256 키를 사용한다.
 
 ### 관리
 

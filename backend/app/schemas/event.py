@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
@@ -24,8 +24,12 @@ class EventRead(BaseModel):
     age_max: int | None
     event_start: datetime | None
     event_end: datetime | None
+    event_start_date: date | None
+    event_end_date: date | None
     registration_start: datetime | None
     registration_end: datetime | None
+    registration_start_date: date | None
+    registration_end_date: date | None
     registration_status: str | None
     application_method: str | None
     participation_type: str | None
@@ -40,6 +44,7 @@ class EventRead(BaseModel):
     image_url: str | None
     source_id: int
     source_event_id: str | None
+    source_item_key: str
     source_url: str
     collected_at: datetime
     updated_at: datetime
@@ -53,4 +58,3 @@ class EventListResponse(BaseModel):
     total: int
     limit: int
     offset: int
-
