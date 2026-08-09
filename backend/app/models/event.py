@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.event_occurrence import EventOccurrence
     from app.models.source import Source
 
 
@@ -75,4 +76,9 @@ class Event(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     source: Mapped["Source"] = relationship(back_populates="events")
-
+    occurrences: Mapped[list["EventOccurrence"]] = relationship(
+        back_populates="event",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="EventOccurrence.start_at",
+    )
