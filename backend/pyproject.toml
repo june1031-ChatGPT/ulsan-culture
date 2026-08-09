@@ -9,7 +9,9 @@ description = "Ulsan Culture Phase 1 API"
 requires-python = ">=3.11"
 dependencies = [
   "alembic>=1.16,<2.0",
+  "beautifulsoup4>=4.13,<5.0",
   "fastapi>=0.138,<1.0",
+  "lxml>=6.0,<7.0",
   "psycopg[binary]>=3.2,<4.0",
   "pydantic-settings>=2.10,<3.0",
   "sqlalchemy>=2.0,<3.0",
