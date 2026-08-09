@@ -2,6 +2,8 @@ import asyncio
 from collections import Counter
 from datetime import date
 from pathlib import Path
+import sys
+from types import ModuleType
 from urllib.parse import parse_qs
 
 import httpx
@@ -14,6 +16,7 @@ from app.crawlers.ulsan_moa import (
     is_retryable_status,
 )
 from app.crawlers.ulsan_moa.cli import format_summary
+from app.crawlers.ulsan_moa import cli
 
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "ulsan_moa"
@@ -302,3 +305,26 @@ def test_client_rejects_external_detail_before_any_network_request():
         await async_client.aclose()
 
     asyncio.run(scenario())
+
+
+def test_dry_run_cli_does_not_import_or_access_database(monkeypatch, capsys):
+    class ContextClient(FakeClient):
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+    client = ContextClient("f300_list.html", detail_error=True)
+    monkeypatch.setattr(cli, "UlsanMoaClient", lambda: client)
+
+    database_sentinel = ModuleType("app.database")
+
+    def reject_database_access(name):
+        raise AssertionError(f"dry-run accessed database attribute {name}")
+
+    database_sentinel.__getattr__ = reject_database_access
+    monkeypatch.setitem(sys.modules, "app.database", database_sentinel)
+
+    assert cli.main(["dry-run", "--source", "F300", "--page", "1"]) == 0
+    assert "울산모아 dry-run" in capsys.readouterr().out

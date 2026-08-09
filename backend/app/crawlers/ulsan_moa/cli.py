@@ -21,6 +21,11 @@ def build_parser() -> argparse.ArgumentParser:
     dry_run.add_argument("--page", type=int, default=1)
     dry_run.add_argument("--page-size", type=int, default=12, choices=range(1, 13))
     dry_run.add_argument("--json", action="store_true", help="JSON 형식으로 출력")
+    ingest = subparsers.add_parser("ingest", help="DB에 한 페이지만 안전하게 저장")
+    ingest.add_argument("--source", type=str.upper, choices=("F300", "F400"), required=True)
+    ingest.add_argument("--page", type=int, default=1)
+    ingest.add_argument("--page-size", type=int, default=12, choices=range(1, 13))
+    ingest.add_argument("--json", action="store_true", help="JSON 형식으로 출력")
     return parser
 
 
@@ -30,6 +35,18 @@ async def _run(args: argparse.Namespace) -> DryRunSummary:
             args.source, page=args.page, page_size=args.page_size
         )
         return result.summary
+
+
+async def _run_ingest(args: argparse.Namespace):
+    # Keep DB imports out of the dry-run path, including module import side effects.
+    from app.crawlers.ulsan_moa.ingest import ingest_collected_page
+    from app.database import SessionLocal
+
+    async with UlsanMoaClient() as client:
+        result = await UlsanMoaAdapter(client).collect_page(
+            args.source, page=args.page, page_size=args.page_size
+        )
+    return ingest_collected_page(result, session_factory=SessionLocal)
 
 
 def format_summary(summary: DryRunSummary) -> str:
@@ -60,6 +77,14 @@ def format_summary(summary: DryRunSummary) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "ingest":
+        summary = asyncio.run(_run_ingest(args))
+        if args.json:
+            print(json.dumps(asdict(summary), ensure_ascii=False, indent=2))
+        else:
+            print(format_ingest_summary(summary))
+        return 0 if summary.fetched_count > 0 and not summary.errors else 1
+
     summary = asyncio.run(_run(args))
     if args.json:
         print(
@@ -70,6 +95,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         print(format_summary(summary))
     return 0 if summary.list_count > 0 else 1
+
+
+def format_ingest_summary(summary: Any) -> str:
+    lines = [
+        f"울산모아 ingest: {summary.source} page {summary.page}",
+        f"수집/저장/실패: {summary.fetched_count}/{summary.persisted_count}/{summary.failed_count}",
+        f"Event insert/update: {summary.event_inserted_count}/{summary.event_updated_count}",
+        "EventOccurrence insert/update: "
+        f"{summary.occurrence_inserted_count}/{summary.occurrence_updated_count}",
+    ]
+    if summary.errors:
+        lines.append("오류 상세: " + " | ".join(summary.errors))
+    return "\n".join(lines)
 
 
 def _json_default(value: Any) -> str:

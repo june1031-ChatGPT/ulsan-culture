@@ -1,6 +1,6 @@
 # 울산컬처
 
-아이를 둔 부모가 울산의 문화 프로그램을 미리 발견하고 접수 일정을 놓치지 않도록 돕는 서비스입니다. 현재 울산모아는 DB 저장 없는 단일 페이지 dry-run 수집을 지원하며, 대량 수집과 upsert는 포함하지 않습니다.
+아이를 둔 부모가 울산의 문화 프로그램을 미리 발견하고 접수 일정을 놓치지 않도록 돕는 서비스입니다. 현재 울산모아는 DB 저장 없는 단일 페이지 dry-run과 PostgreSQL 단일 페이지 ingest를 지원합니다. 전체 페이지 수집과 운영 scheduler는 포함하지 않습니다.
 
 ## 구성
 
@@ -71,6 +71,18 @@ Set-Location backend
 ```
 
 `--page-size`는 안전한 dry-run 범위인 1~12만 허용합니다. 단위 테스트는 fixture/mock만 사용하므로 실제 사이트를 호출하지 않습니다.
+
+### 울산모아 단일 페이지 ingest
+
+`ingest`는 F300 또는 F400 중 하나의 지정한 한 페이지만 수집해 `Source`, `Event`, `EventOccurrence`를 PostgreSQL에 upsert합니다. `--page-size`는 1~12만 허용하고 전체 페이지 옵션이나 반복 수집은 제공하지 않습니다.
+
+```powershell
+Set-Location backend
+.\.venv\Scripts\python.exe -m app.crawlers.ulsan_moa.cli ingest --source F300 --page 1
+.\.venv\Scripts\python.exe -m app.crawlers.ulsan_moa.cli ingest --source F400 --page 1
+```
+
+각 Event와 그 회차는 하나의 트랜잭션으로 저장됩니다. 한 Event가 실패해도 다른 Event의 성공분은 유지하고, Source의 마지막 확인/성공/오류 통계는 배치 결과를 별도 트랜잭션에서 기록합니다. 부분 응답에서 누락된 회차는 삭제하지 않습니다.
 
 ### 4. Frontend 설치 및 실행
 

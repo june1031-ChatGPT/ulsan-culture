@@ -43,12 +43,17 @@ class UlsanMoaClientProtocol(Protocol):
 
 
 class UlsanMoaAdapter:
-    """Orchestrates one dry-run page without creating a DB session or writing data."""
+    """Collects one page into DB-free normalized objects."""
 
     def __init__(self, client: UlsanMoaClientProtocol) -> None:
         self.client = client
 
     async def dry_run(
+        self, source: SourceCode, *, page: int = 1, page_size: int = 12
+    ) -> DryRunResult:
+        return await self.collect_page(source, page=page, page_size=page_size)
+
+    async def collect_page(
         self, source: SourceCode, *, page: int = 1, page_size: int = 12
     ) -> DryRunResult:
         parser_errors: list[str] = []

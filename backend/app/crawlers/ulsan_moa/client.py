@@ -12,7 +12,8 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 from bs4 import BeautifulSoup
 
-from app.crawlers.ulsan_moa.parser import BASE_URL, canonicalize_url
+from app.crawlers.ulsan_moa.config import ULSAN_MOA_SOURCE
+from app.crawlers.ulsan_moa.parser import canonicalize_url
 
 
 SourceCode = Literal["F300", "F400"]
@@ -60,7 +61,7 @@ class UlsanMoaClient:
         self,
         *,
         http_client: httpx.AsyncClient | None = None,
-        base_url: str = BASE_URL,
+        base_url: str = ULSAN_MOA_SOURCE.host_url,
         timeout_seconds: float = 20.0,
         max_retries: int = 2,
         backoff_base_seconds: float = 0.5,
@@ -69,14 +70,16 @@ class UlsanMoaClient:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         random_uniform: Callable[[float, float], float] = random.uniform,
     ) -> None:
-        if base_url.rstrip("/") != BASE_URL:
-            raise ValueError(f"base_url must be the non-www host {BASE_URL}")
+        if base_url.rstrip("/") != ULSAN_MOA_SOURCE.host_url:
+            raise ValueError(
+                f"base_url must be the non-www host {ULSAN_MOA_SOURCE.host_url}"
+            )
         if max_retries < 0:
             raise ValueError("max_retries must be non-negative")
         if concurrency < 1 or concurrency > 2:
             raise ValueError("concurrency must be between 1 and 2")
 
-        self.base_url = BASE_URL
+        self.base_url = ULSAN_MOA_SOURCE.host_url
         self.max_retries = max_retries
         self.backoff_base_seconds = backoff_base_seconds
         self.jitter_seconds = jitter_seconds

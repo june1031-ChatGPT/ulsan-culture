@@ -12,8 +12,9 @@ from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup, Tag
 
+from app.crawlers.ulsan_moa.config import ULSAN_MOA_SOURCE
 
-BASE_URL = "https://ulsan.go.kr"
+BASE_URL = ULSAN_MOA_SOURCE.host_url
 SEOUL = ZoneInfo("Asia/Seoul")
 ResourceKind = Literal["LEC", "EXP", "DAY", "external"]
 

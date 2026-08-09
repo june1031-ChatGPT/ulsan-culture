@@ -30,3 +30,6 @@ include = ["app*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q -p no:cacheprovider"
+markers = [
+  "postgres_integration: requires an explicitly enabled PostgreSQL database",
+]
