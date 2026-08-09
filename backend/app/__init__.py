@@ -1,0 +1,2 @@
+"""Ulsan Culture backend application."""
+
