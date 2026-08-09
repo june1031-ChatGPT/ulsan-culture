@@ -1,6 +1,6 @@
 # 울산컬처
 
-아이를 둔 부모가 울산의 문화 프로그램을 미리 발견하고 접수 일정을 놓치지 않도록 돕는 서비스입니다. 현재 구현 범위는 Phase 1이며, 실제 기관 크롤러와 임시 행사 데이터는 포함하지 않습니다.
+아이를 둔 부모가 울산의 문화 프로그램을 미리 발견하고 접수 일정을 놓치지 않도록 돕는 서비스입니다. 현재 울산모아는 DB 저장 없는 단일 페이지 dry-run 수집을 지원하며, 대량 수집과 upsert는 포함하지 않습니다.
 
 ## 구성
 
@@ -59,6 +59,18 @@ python -m venv .venv
 - API 문서: <http://localhost:8000/docs>
 
 신규 DB에는 행사 데이터가 없으므로 `/api/events`의 `items`가 빈 배열인 것이 정상입니다.
+
+### 울산모아 단일 페이지 dry-run
+
+다음 명령은 실제 울산모아 목록 한 페이지만 읽고 내부 상세와 활성 날짜의 EXP/DAY 슬롯을 파싱합니다. DB 세션을 만들거나 저장하지 않으며, 실제 HTTP 요청 수를 결과에 표시합니다.
+
+```powershell
+Set-Location backend
+.\.venv\Scripts\python.exe -m app.crawlers.ulsan_moa.cli dry-run --source F300 --page 1
+.\.venv\Scripts\python.exe -m app.crawlers.ulsan_moa.cli dry-run --source F400 --page 1
+```
+
+`--page-size`는 안전한 dry-run 범위인 1~12만 허용합니다. 단위 테스트는 fixture/mock만 사용하므로 실제 사이트를 호출하지 않습니다.
 
 ### 4. Frontend 설치 및 실행
 
