@@ -20,7 +20,7 @@ SourceCode = Literal["F300", "F400"]
 EndpointName = Literal["list", "detail", "exp_slots", "day_slots"]
 
 DEFAULT_USER_AGENT = (
-    "UlsanCulture/0.1 (single-page dry-run crawler; https://ulsan.go.kr source)"
+    "UlsanCulture/0.1 (low-rate public-page crawler; https://ulsan.go.kr source)"
 )
 RETRYABLE_STATUS_CODES = frozenset({408, 425, 429, 500, 502, 503, 504})
 _RESOURCE_ID_PATTERN = re.compile(r"^(LEC|EXP|DAY)_[A-Za-z0-9_]+$")
@@ -131,7 +131,7 @@ class UlsanMoaClient:
         if page < 1:
             raise ValueError("page must be at least 1")
         if page_size < 1 or page_size > 12:
-            raise ValueError("page_size must be between 1 and 12 for a dry-run")
+            raise ValueError("page_size must be between 1 and 12")
         step = "gallery" if source == "F300" else "list_img"
         response = await self._request(
             "list",

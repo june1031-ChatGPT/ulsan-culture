@@ -8,11 +8,18 @@ from app.crawlers.ulsan_moa.client import (
     UlsanMoaNetworkError,
     is_retryable_status,
 )
-from app.crawlers.ulsan_moa.models import DryRunResult, DryRunSummary, NormalizedEvent
+from app.crawlers.ulsan_moa.models import (
+    DryRunResult,
+    DryRunSummary,
+    FullCollectionResult,
+    FullCollectionSummary,
+    NormalizedEvent,
+)
 from app.crawlers.ulsan_moa.parser import (
     ParsedDetail,
     ParsedListItem,
     ParsedOccurrence,
+    ParsedPagination,
     UlsanMoaParseError,
     canonicalize_url,
     parse_day_detail,
@@ -22,15 +29,19 @@ from app.crawlers.ulsan_moa.parser import (
     parse_exp_slots,
     parse_lec_detail,
     parse_list,
+    parse_pagination,
 )
 
 __all__ = [
     "DryRunResult",
     "DryRunSummary",
+    "FullCollectionResult",
+    "FullCollectionSummary",
     "NormalizedEvent",
     "ParsedDetail",
     "ParsedListItem",
     "ParsedOccurrence",
+    "ParsedPagination",
     "UlsanMoaAdapter",
     "UlsanMoaClient",
     "UlsanMoaNetworkError",
@@ -46,4 +57,5 @@ __all__ = [
     "parse_exp_slots",
     "parse_lec_detail",
     "parse_list",
+    "parse_pagination",
 ]

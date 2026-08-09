@@ -45,6 +45,7 @@ class NormalizedEvent:
     source_item_key: str
     source_url: str
     occurrences: tuple[ParsedOccurrence, ...]
+    detail_complete: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,9 +65,43 @@ class DryRunSummary:
     network_errors: tuple[str, ...]
     request_counts: dict[str, int]
     samples: tuple[dict[str, Any], ...]
+    list_page_succeeded: bool = True
+    pagination_detected: bool = False
+    pagination_current_page: int | None = None
+    next_page: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class DryRunResult:
     summary: DryRunSummary
+    events: tuple[NormalizedEvent, ...]
+
+
+RunStatus = Literal["success", "partial", "failed"]
+
+
+@dataclass(frozen=True, slots=True)
+class FullCollectionSummary:
+    source: Literal["F300", "F400"]
+    page_size: int
+    started_at: datetime
+    finished_at: datetime
+    status: RunStatus
+    pages_attempted: int
+    pages_succeeded: int
+    items_seen: int
+    detail_success_count: int
+    detail_failure_count: int
+    occurrence_count: int
+    network_errors: tuple[str, ...]
+    parser_errors: tuple[str, ...]
+    request_counts: dict[str, int]
+    is_complete_snapshot: bool
+    stop_reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class FullCollectionResult:
+    summary: FullCollectionSummary
+    pages: tuple[DryRunResult, ...]
     events: tuple[NormalizedEvent, ...]

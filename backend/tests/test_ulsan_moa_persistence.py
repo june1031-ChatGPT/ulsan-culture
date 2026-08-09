@@ -118,8 +118,12 @@ def test_event_insert_maps_all_supported_normalized_fields(db_session):
     assert stored.event_start == event.event_start.replace(tzinfo=None)
     assert stored.event_start_date is None
     assert stored.registration_start == event.registration_start.replace(tzinfo=None)
+    assert stored.registration_period_text == event.registration_period_text
+    assert stored.event_period_text == event.event_period_text
     assert stored.capacity == 20
+    assert stored.capacity_text == "14 / 20"
     assert stored.fee == Decimal("0.00")
+    assert stored.fee_text == "무료"
     assert stored.is_free is True
     assert stored.reservation_url == event.reservation_url
     assert stored.detail_url == event.detail_url
@@ -130,8 +134,36 @@ def test_event_insert_maps_all_supported_normalized_fields(db_session):
     assert stored.collected_at == OBSERVED_AT.replace(tzinfo=None)
     assert stored.updated_at == OBSERVED_AT.replace(tzinfo=None)
     assert stored.last_verified_at == OBSERVED_AT.replace(tzinfo=None)
+    assert stored.last_seen_at == OBSERVED_AT.replace(tzinfo=None)
+    assert stored.source_code == "F300"
     assert stored.content_hash == build_content_hash(event)
     assert stored.is_active is True
+
+
+def test_unstructured_source_text_survives_when_normalized_values_are_null(db_session):
+    sid = source_id(db_session)
+    event = normalized_event(
+        registration_start=None,
+        registration_end=None,
+        registration_period_text="상시",
+        capacity=None,
+        capacity_text="10팀 / 가족당 최대 4명",
+        fee=None,
+        fee_text="회차별 상이 / 현장 별도",
+        is_free=None,
+    )
+
+    with db_session.begin():
+        result = upsert_event_with_occurrences(db_session, source_id=sid, event=event)
+
+    stored = db_session.get_one(Event, result.event_id)
+    assert stored.registration_start is None
+    assert stored.registration_end is None
+    assert stored.registration_period_text == "상시"
+    assert stored.capacity is None
+    assert stored.capacity_text == "10팀 / 가족당 최대 4명"
+    assert stored.fee is None
+    assert stored.fee_text == "회차별 상이 / 현장 별도"
 
 
 def test_event_update_and_duplicate_prevention(db_session):

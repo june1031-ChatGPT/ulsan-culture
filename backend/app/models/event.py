@@ -21,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.crawl_run import CrawlRun
     from app.models.event_occurrence import EventOccurrence
     from app.models.source import Source
 
@@ -96,10 +97,12 @@ class Event(Base):
     event_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_start_date: Mapped[date | None] = mapped_column(Date)
     event_end_date: Mapped[date | None] = mapped_column(Date)
+    event_period_text: Mapped[str | None] = mapped_column(Text)
     registration_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     registration_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     registration_start_date: Mapped[date | None] = mapped_column(Date)
     registration_end_date: Mapped[date | None] = mapped_column(Date)
+    registration_period_text: Mapped[str | None] = mapped_column(Text)
     registration_status: Mapped[str | None] = mapped_column(String(50), index=True)
 
     application_method: Mapped[str | None] = mapped_column(String(100))
@@ -107,9 +110,11 @@ class Event(Base):
     prerequisite_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     prerequisite_text: Mapped[str | None] = mapped_column(Text)
     capacity: Mapped[int | None] = mapped_column(Integer)
+    capacity_text: Mapped[str | None] = mapped_column(Text)
     lottery_or_firstcome: Mapped[str | None] = mapped_column(String(50))
 
     fee: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    fee_text: Mapped[str | None] = mapped_column(Text)
     is_free: Mapped[bool | None] = mapped_column(Boolean)
     reservation_url: Mapped[str | None] = mapped_column(String(2048))
     detail_url: Mapped[str | None] = mapped_column(String(2048))
@@ -121,6 +126,9 @@ class Event(Base):
     source_event_id: Mapped[str | None] = mapped_column(String(255))
     source_item_key: Mapped[str] = mapped_column(String(255), nullable=False)
     source_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    # One DB Source contains both Ulsan Moa root lists; this partition is needed
+    # to prevent an F300 snapshot from marking F400 rows stale (and vice versa).
+    source_code: Mapped[str | None] = mapped_column(String(20), index=True)
 
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -129,10 +137,17 @@ class Event(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
     last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
+    last_seen_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("crawl_runs.id", ondelete="SET NULL"), index=True
+    )
     content_hash: Mapped[str | None] = mapped_column(String(64))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     source: Mapped["Source"] = relationship(back_populates="events")
+    last_seen_run: Mapped["CrawlRun | None"] = relationship()
     occurrences: Mapped[list["EventOccurrence"]] = relationship(
         back_populates="event",
         cascade="all, delete-orphan",

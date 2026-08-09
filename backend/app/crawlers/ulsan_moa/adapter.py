@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import asyncio
 from collections import Counter
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from hashlib import sha256
 from typing import Protocol, cast
 from urllib.parse import parse_qs, urlsplit
 
 from app.crawlers.ulsan_moa.client import SourceCode, UlsanMoaNetworkError
-from app.crawlers.ulsan_moa.models import DryRunResult, DryRunSummary, NormalizedEvent
+from app.crawlers.ulsan_moa.models import (
+    DryRunResult,
+    DryRunSummary,
+    FullCollectionResult,
+    FullCollectionSummary,
+    NormalizedEvent,
+)
 from app.crawlers.ulsan_moa.parser import (
     ParsedDetail,
     ParsedListItem,
@@ -20,6 +28,7 @@ from app.crawlers.ulsan_moa.parser import (
     parse_detail,
     parse_exp_slots,
     parse_list,
+    parse_pagination,
 )
 
 
@@ -45,8 +54,16 @@ class UlsanMoaClientProtocol(Protocol):
 class UlsanMoaAdapter:
     """Collects one page into DB-free normalized objects."""
 
-    def __init__(self, client: UlsanMoaClientProtocol) -> None:
+    def __init__(
+        self,
+        client: UlsanMoaClientProtocol,
+        *,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
         self.client = client
+        self._sleep = sleep
+        self._now = now or (lambda: datetime.now(UTC))
 
     async def dry_run(
         self, source: SourceCode, *, page: int = 1, page_size: int = 12
@@ -54,7 +71,13 @@ class UlsanMoaAdapter:
         return await self.collect_page(source, page=page, page_size=page_size)
 
     async def collect_page(
-        self, source: SourceCode, *, page: int = 1, page_size: int = 12
+        self,
+        source: SourceCode,
+        *,
+        page: int = 1,
+        page_size: int = 12,
+        _request_delay_seconds: float = 0.0,
+        _max_active_dates_per_detail: int | None = None,
     ) -> DryRunResult:
         parser_errors: list[str] = []
         network_errors: list[str] = []
@@ -74,6 +97,18 @@ class UlsanMoaAdapter:
             return self._empty_result(
                 source, page, parser_errors, network_errors, initial_requests
             )
+        pagination_detected = False
+        pagination_current_page: int | None = None
+        next_page: int | None = None
+        list_page_succeeded = True
+        try:
+            pagination = parse_pagination(list_html, expected_page=page)
+            pagination_detected = pagination.detected
+            pagination_current_page = pagination.current_page
+            next_page = pagination.next_page
+        except UlsanMoaParseError as exc:
+            parser_errors.append(f"pagination: {exc}")
+            list_page_succeeded = False
 
         events: list[NormalizedEvent] = []
         detail_success = 0
@@ -85,6 +120,8 @@ class UlsanMoaAdapter:
 
             if not item.is_external:
                 try:
+                    if _request_delay_seconds:
+                        await self._sleep(_request_delay_seconds)
                     detail_html = await self.client.fetch_detail(item.detail_url)
                     detail = parse_detail(detail_html, source_url=item.detail_url)
                     detail_success += 1
@@ -102,6 +139,8 @@ class UlsanMoaAdapter:
                             detail,
                             parser_errors=parser_errors,
                             network_errors=network_errors,
+                            request_delay_seconds=_request_delay_seconds,
+                            max_active_dates=_max_active_dates_per_detail,
                         )
                     )
 
@@ -127,8 +166,169 @@ class UlsanMoaAdapter:
             network_errors=tuple(network_errors),
             request_counts=request_counts,
             samples=samples,
+            list_page_succeeded=list_page_succeeded,
+            pagination_detected=pagination_detected,
+            pagination_current_page=pagination_current_page,
+            next_page=next_page,
         )
         return DryRunResult(summary=summary, events=tuple(events))
+
+    async def iterate_pages(
+        self,
+        source: SourceCode,
+        *,
+        page_size: int = 12,
+        max_pages: int = 500,
+        page_delay_seconds: float = 1.0,
+        detail_request_delay_seconds: float = 0.25,
+        max_active_dates_per_detail: int = 31,
+    ) -> AsyncIterator[DryRunResult]:
+        """Yield pages sequentially and stop only on verified HTML signals.
+
+        A hard limit is always required (and defaults above the documented F300
+        size) so a broken pagination response cannot create an infinite loop.
+        """
+        if max_pages < 1:
+            raise ValueError("max_pages must be at least 1")
+        if page_delay_seconds < 0 or detail_request_delay_seconds < 0:
+            raise ValueError("request delays must be non-negative")
+        if max_active_dates_per_detail < 1:
+            raise ValueError("max_active_dates_per_detail must be at least 1")
+
+        page = 1
+        for _ in range(max_pages):
+            result = await self.collect_page(
+                source,
+                page=page,
+                page_size=page_size,
+                _request_delay_seconds=detail_request_delay_seconds,
+                _max_active_dates_per_detail=max_active_dates_per_detail,
+            )
+            yield result
+            summary = result.summary
+            if not summary.list_page_succeeded:
+                return
+            if summary.list_count < page_size:
+                return
+            if summary.pagination_detected and summary.next_page is None:
+                return
+            if not summary.pagination_detected:
+                return
+            page = summary.next_page
+            if page_delay_seconds:
+                await self._sleep(page_delay_seconds)
+
+    async def collect_all_pages(
+        self,
+        source: SourceCode,
+        *,
+        page_size: int = 12,
+        max_pages: int = 500,
+        page_delay_seconds: float = 1.0,
+        detail_request_delay_seconds: float = 0.25,
+        max_active_dates_per_detail: int = 31,
+    ) -> FullCollectionResult:
+        """Collect a DB-free full-snapshot candidate without persisting it."""
+        started_at = self._now()
+        initial_requests = Counter(self.client.request_counts)
+        pages = [
+            result
+            async for result in self.iterate_pages(
+                source,
+                page_size=page_size,
+                max_pages=max_pages,
+                page_delay_seconds=page_delay_seconds,
+                detail_request_delay_seconds=detail_request_delay_seconds,
+                max_active_dates_per_detail=max_active_dates_per_detail,
+            )
+        ]
+        finished_at = self._now()
+
+        parser_errors = [
+            f"page {page.summary.page}: {error}"
+            for page in pages
+            for error in page.summary.parser_errors
+        ]
+        network_errors = [
+            f"page {page.summary.page}: {error}"
+            for page in pages
+            for error in page.summary.network_errors
+        ]
+        last = pages[-1].summary
+        natural_end = last.list_page_succeeded and (
+            (last.list_count < page_size and last.next_page is None)
+            or (last.pagination_detected and last.next_page is None)
+        )
+        if last.list_count < page_size and last.next_page is not None:
+            parser_errors.append(
+                f"page {last.page}: short page still advertises next page "
+                f"{last.next_page}"
+            )
+            stop_reason = "pagination-conflict"
+        elif (
+            last.list_page_succeeded
+            and last.list_count == page_size
+            and not last.pagination_detected
+        ):
+            parser_errors.append(
+                f"page {last.page}: full page has no pagination evidence"
+            )
+            stop_reason = "pagination-missing"
+        elif len(pages) == max_pages and last.next_page is not None:
+            parser_errors.append(f"pagination exceeded max_pages={max_pages}")
+            stop_reason = "max-pages"
+        elif not last.list_page_succeeded:
+            stop_reason = "page-failure"
+        elif last.list_count < page_size:
+            stop_reason = "short-page"
+        else:
+            stop_reason = "last-page"
+
+        event_keys = [event.source_item_key for page in pages for event in page.events]
+        if len(event_keys) != len(set(event_keys)):
+            parser_errors.append("duplicate source_item_key appeared across pages")
+        pages_succeeded = sum(page.summary.list_page_succeeded for page in pages)
+        detail_failure_count = sum(
+            page.summary.detail_failure_count for page in pages
+        )
+        is_complete_snapshot = bool(
+            natural_end
+            and pages_succeeded == len(pages)
+            and not parser_errors
+            and not network_errors
+            and detail_failure_count == 0
+        )
+        status = (
+            "success"
+            if is_complete_snapshot
+            else "partial"
+            if pages_succeeded > 0
+            else "failed"
+        )
+        events = tuple(event for page in pages for event in page.events)
+        summary = FullCollectionSummary(
+            source=source,
+            page_size=page_size,
+            started_at=started_at,
+            finished_at=finished_at,
+            status=status,
+            pages_attempted=len(pages),
+            pages_succeeded=pages_succeeded,
+            items_seen=sum(page.summary.list_count for page in pages),
+            detail_success_count=sum(
+                page.summary.detail_success_count for page in pages
+            ),
+            detail_failure_count=detail_failure_count,
+            occurrence_count=sum(page.summary.occurrence_count for page in pages),
+            network_errors=tuple(network_errors),
+            parser_errors=tuple(parser_errors),
+            request_counts=self._request_delta(initial_requests),
+            is_complete_snapshot=is_complete_snapshot,
+            stop_reason=stop_reason,
+        )
+        return FullCollectionResult(
+            summary=summary, pages=tuple(pages), events=events
+        )
 
     async def _fetch_occurrences(
         self,
@@ -137,11 +337,27 @@ class UlsanMoaAdapter:
         *,
         parser_errors: list[str],
         network_errors: list[str],
+        request_delay_seconds: float,
+        max_active_dates: int | None,
     ) -> list[ParsedOccurrence]:
         result: list[ParsedOccurrence] = []
         mnu_code = _menu_code(item.detail_url, detail.resource_kind)
+        if max_active_dates is not None and len(detail.active_dates) > max_active_dates:
+            parser_errors.append(
+                self._issue(
+                    "slots",
+                    item,
+                    ValueError(
+                        f"active date count {len(detail.active_dates)} exceeds "
+                        f"safety limit {max_active_dates}"
+                    ),
+                )
+            )
+            return result
         for active_date in detail.active_dates:
             try:
+                if request_delay_seconds:
+                    await self._sleep(request_delay_seconds)
                 if detail.resource_kind == "EXP":
                     payload = await self.client.fetch_exp_slots(
                         rsrc_unq_id=detail.source_event_id,
@@ -202,6 +418,8 @@ class UlsanMoaAdapter:
             network_errors=tuple(network_errors),
             request_counts=self._request_delta(initial_requests),
             samples=(),
+            list_page_succeeded=False,
+            pagination_current_page=page,
         )
         return DryRunResult(summary=summary, events=())
 
@@ -259,6 +477,7 @@ def normalize_event(
             source_item_key=source_item_key,
             source_url=item.detail_url,
             occurrences=occurrences,
+            detail_complete=item.is_external,
         )
 
     return NormalizedEvent(
@@ -299,6 +518,7 @@ def normalize_event(
         source_item_key=build_source_item_key(detail.source_event_id, detail.detail_url),
         source_url=detail.detail_url,
         occurrences=occurrences,
+        detail_complete=True,
     )
 
 

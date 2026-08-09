@@ -41,23 +41,30 @@ EVENT_UPDATE_FIELDS = (
     "event_end",
     "event_start_date",
     "event_end_date",
+    "event_period_text",
     "registration_start",
     "registration_end",
     "registration_start_date",
     "registration_end_date",
+    "registration_period_text",
     "registration_status",
     "application_method",
     "capacity",
+    "capacity_text",
     "fee",
+    "fee_text",
     "is_free",
     "reservation_url",
     "detail_url",
     "image_url",
     "source_event_id",
     "source_url",
+    "source_code",
     "collected_at",
     "updated_at",
     "last_verified_at",
+    "last_seen_at",
+    "last_seen_run_id",
     "content_hash",
     "is_active",
 )
@@ -181,6 +188,7 @@ def upsert_event_with_occurrences(
     source_id: int,
     event: NormalizedEvent,
     collected_at: datetime | None = None,
+    crawl_run_id: int | None = None,
 ) -> EventUpsertResult:
     """Upsert one Event graph. The caller owns the surrounding transaction."""
     observed_at = collected_at or datetime.now(UTC)
@@ -196,6 +204,7 @@ def upsert_event_with_occurrences(
         source_id=source_id,
         observed_at=observed_at,
         content_hash=content_hash,
+        crawl_run_id=crawl_run_id,
     )
     event_id = _upsert_event_row(session, values)
 
@@ -241,6 +250,7 @@ def _event_values(
     source_id: int,
     observed_at: datetime,
     content_hash: str,
+    crawl_run_id: int | None,
 ) -> dict[str, Any]:
     return {
         "title": event.title,
@@ -254,14 +264,18 @@ def _event_values(
         "event_end": event.event_end,
         "event_start_date": event.event_start_date,
         "event_end_date": event.event_end_date,
+        "event_period_text": event.event_period_text,
         "registration_start": event.registration_start,
         "registration_end": event.registration_end,
         "registration_start_date": event.registration_start_date,
         "registration_end_date": event.registration_end_date,
+        "registration_period_text": event.registration_period_text,
         "registration_status": event.registration_status,
         "application_method": event.application_method,
         "capacity": event.capacity,
+        "capacity_text": event.capacity_text,
         "fee": event.fee,
+        "fee_text": event.fee_text,
         "is_free": event.is_free,
         "reservation_url": event.reservation_url,
         "detail_url": event.detail_url,
@@ -270,12 +284,39 @@ def _event_values(
         "source_event_id": event.source_event_id,
         "source_item_key": event.source_item_key,
         "source_url": event.source_url,
+        "source_code": event.source_code,
         "collected_at": observed_at,
         "updated_at": observed_at,
         "last_verified_at": observed_at,
+        "last_seen_at": observed_at,
+        "last_seen_run_id": crawl_run_id,
         "content_hash": content_hash,
         "is_active": True,
     }
+
+
+def mark_existing_event_seen(
+    session: Session,
+    *,
+    source_id: int,
+    source_item_key: str,
+    observed_at: datetime,
+    crawl_run_id: int | None,
+) -> int | None:
+    event = session.scalars(
+        select(Event).where(
+            Event.source_id == source_id,
+            Event.source_item_key == source_item_key,
+        )
+    ).one_or_none()
+    if event is None:
+        return None
+    event.last_seen_at = observed_at
+    event.last_seen_run_id = crawl_run_id
+    event.is_active = True
+    event.updated_at = observed_at
+    session.flush()
+    return event.id
 
 
 def _occurrence_values(

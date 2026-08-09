@@ -26,18 +26,22 @@ class EventRead(BaseModel):
     event_end: datetime | None
     event_start_date: date | None
     event_end_date: date | None
+    event_period_text: str | None
     registration_start: datetime | None
     registration_end: datetime | None
     registration_start_date: date | None
     registration_end_date: date | None
+    registration_period_text: str | None
     registration_status: str | None
     application_method: str | None
     participation_type: str | None
     prerequisite_required: bool
     prerequisite_text: str | None
     capacity: int | None
+    capacity_text: str | None
     lottery_or_firstcome: str | None
     fee: Decimal | None
+    fee_text: str | None
     is_free: bool | None
     reservation_url: str | None
     detail_url: str | None
@@ -46,9 +50,12 @@ class EventRead(BaseModel):
     source_event_id: str | None
     source_item_key: str
     source_url: str
+    source_code: str | None
     collected_at: datetime
     updated_at: datetime
     last_verified_at: datetime | None
+    last_seen_at: datetime | None
+    last_seen_run_id: int | None
     content_hash: str | None
     is_active: bool
 

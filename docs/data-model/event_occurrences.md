@@ -36,4 +36,4 @@
 3. 응답이 차단/대기/부분 payload가 아님을 검증했다.
 4. 같은 수집 run 안에서 해당 Event의 회차 집합이 완전하다고 표시됐다.
 
-이 조건을 만족한 완전 스냅샷에서만 이전 회차에 `last_seen_at`/`is_active` 같은 명시적 상태를 도입해 stale 처리한다. 물리 삭제는 감사와 장애 복구를 어렵게 하므로 기본 정책으로 사용하지 않는다. 이 필드들은 현재 모델에 없으므로 실제 stale 기능을 구현할 때 별도 migration으로 추가한다.
+Event 수준에는 `crawl_runs`, `last_seen_at`, `last_seen_run_id`, `is_active`와 완전 스냅샷 gate를 도입했다. 자세한 정책은 `docs/data-model/crawl_runs.md`를 따른다. occurrence 수준 stale은 여전히 구현하지 않았으며, 향후에도 위 조건에 더해 해당 Event의 상세와 모든 활성 날짜 slot 응답이 완전하다는 증거가 있을 때만 별도 상태 필드와 migration으로 도입한다. 물리 삭제는 감사와 장애 복구를 어렵게 하므로 기본 정책으로 사용하지 않는다.

@@ -117,6 +117,13 @@ class ParsedOccurrence:
     source_raw_data: dict[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class ParsedPagination:
+    current_page: int
+    next_page: int | None
+    detected: bool
+
+
 def canonicalize_url(url: str, *, base_url: str = BASE_URL) -> str:
     """Return an absolute URL without transient session path parameters or fragments."""
     absolute = urljoin(base_url, url.strip())
@@ -147,6 +154,50 @@ def parse_list(html: str, *, base_url: str = BASE_URL) -> list[ParsedListItem]:
         raise UlsanMoaParseError("list response contains no direct card items")
 
     return [_parse_list_card(card, base_url=base_url) for card in cards]
+
+
+def parse_pagination(html: str, *, expected_page: int) -> ParsedPagination:
+    """Read server-rendered page links without relying on a reported total count."""
+    if expected_page < 1:
+        raise ValueError("expected_page must be at least 1")
+    soup = _soup(html)
+    container = soup.select_one(".krds-pagination")
+    if container is None:
+        return ParsedPagination(
+            current_page=expected_page, next_page=None, detected=False
+        )
+
+    active = container.select_one(".page-link.active")
+    current_page = expected_page
+    if active is not None:
+        match = re.search(r"\d+", active.get_text(" ", strip=True))
+        if match:
+            current_page = int(match.group())
+    if current_page != expected_page:
+        raise UlsanMoaParseError(
+            f"pagination current page {current_page} does not match requested page "
+            f"{expected_page}"
+        )
+
+    candidates: set[int] = set()
+    for link in container.select("a[href]"):
+        query = parse_qs(urlsplit(str(link.get("href", ""))).query)
+        values = query.get("pageNo", [])
+        if len(values) == 1 and values[0].isdigit():
+            page_number = int(values[0])
+            if page_number > current_page:
+                candidates.add(page_number)
+
+    next_page = min(candidates) if candidates else None
+    if next_page is not None and next_page != current_page + 1:
+        raise UlsanMoaParseError(
+            f"pagination skips from page {current_page} to page {next_page}"
+        )
+    return ParsedPagination(
+        current_page=current_page,
+        next_page=next_page,
+        detected=True,
+    )
 
 
 def parse_detail(html: str, *, source_url: str) -> ParsedDetail:

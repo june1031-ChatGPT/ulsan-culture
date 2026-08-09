@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.crawl_run import CrawlRun
     from app.models.event import Event
 
 
@@ -31,4 +32,4 @@ class Source(Base):
     )
 
     events: Mapped[list["Event"]] = relationship(back_populates="source")
-
+    crawl_runs: Mapped[list["CrawlRun"]] = relationship(back_populates="source")
